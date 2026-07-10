@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"zenfs/ui"
+	"zenfs/zfs"
 )
 
-// version은 빌드 시 -ldflags "-X main.version=..." 로 주입된다.
 var version = "dev"
 
 func main() {
@@ -13,7 +16,8 @@ func main() {
 		fmt.Println("zenfs", version)
 		return
 	}
-	if err := runTUI(); err != nil {
+	app := ui.NewApp(zfs.ExecRunner{})
+	if _, err := tea.NewProgram(app, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "zenfs:", err)
 		os.Exit(1)
 	}

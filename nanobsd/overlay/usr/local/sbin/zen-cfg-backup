@@ -1,0 +1,11 @@
+#!/bin/sh
+# /cfg 내용을 데이터 풀(tank/backup/cfg)로 백업한다.
+# 대상 데이터셋이 없으면 조용히 종료 (풀 구성 전 상태).
+set -eu
+
+DEST="/tank/backup/cfg"
+zfs list tank/backup/cfg >/dev/null 2>&1 || exit 0
+
+mount /cfg
+trap 'umount /cfg' EXIT
+rsync -a --delete /cfg/ "$DEST/"

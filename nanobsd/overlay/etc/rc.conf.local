@@ -1,0 +1,34 @@
+# zen NAS 기본 설정 — 변경 후 save_cfg 로 /cfg에 영속화할 것
+hostname="zen"
+ifconfig_DEFAULT="DHCP"
+sshd_enable="YES"
+
+# ZFS (데이터 풀)
+zfs_enable="YES"
+
+# SMB (Samba)
+samba_server_enable="YES"
+
+# NFS
+nfs_server_enable="YES"
+nfsv4_server_enable="YES"
+rpcbind_enable="YES"
+mountd_enable="YES"
+rpc_lockd_enable="YES"
+rpc_statd_enable="YES"
+
+# rsync 데몬
+rsyncd_enable="YES"
+
+# WebDAV (lighttpd)
+lighttpd_enable="YES"
+
+# FTP (freebsd-ftpd 패키지 — base에는 더 이상 포함되지 않음; Task 6 fetch 목록에 추가 필요)
+ftpd_enable="YES"
+
+# iSCSI 타겟 — /etc/ctl.conf 작성 후 YES로 변경
+ctld_enable="NO"
+
+# 절전·소음 억제
+sendmail_enable="NONE"
+dumpdev="NO"

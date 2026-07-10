@@ -1,0 +1,10 @@
+# iSCSI 타겟 예시 — /etc/ctl.conf 로 복사·수정 후 rc.conf.local에서 ctld_enable=YES
+# zfs create -V 100G tank/iscsi/vol0  으로 zvol을 먼저 만든다
+target iqn.2026-07.dev.zen:target0 {
+	auth-group no-authentication
+	portal-group default
+	lun 0 {
+		path /dev/zvol/tank/iscsi/vol0
+		size 100G
+	}
+}

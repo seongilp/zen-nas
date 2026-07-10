@@ -5,3 +5,4 @@ vm/
 *.qcow2
 *.qcow2.xz
 .DS_Store
+tui/dist/

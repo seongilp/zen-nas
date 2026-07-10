@@ -16,10 +16,14 @@ if [[ ! -f ~/.ssh/id_ed25519.pub ]]; then
 fi
 
 echo "== 1/5 설정 동기화 =="
-# --no-xattrs: macOS bsdtar가 com.apple.provenance 확장 속성을 아카이브에 넣으면
-# FreeBSD 쪽 tar 추출 시 "Cannot restore extended attributes" 로 실패한다 (dry-run으로 확인).
-# set -e/pipefail 때문에 그 실패가 곧 스크립트 중단으로 이어져 --no-xattrs로 원천 차단한다.
-tar --no-xattrs -C nanobsd -cf - . | ssh "${SSH_OPTS[@]}" 'mkdir -p /zen && tar -xf - -C /zen'
+# 삭제된 로컬 파일이 VM에 남아 이미지에 섞이지 않도록, 이 단계가 소유한 경로만 초기화
+# (/zen/packages 는 vm-fetch-pkgs.sh 소유이므로 건드리지 않는다)
+ssh "${SSH_OPTS[@]}" 'rm -rf /zen/overlay /zen/zen.conf && mkdir -p /zen'
+# --no-xattrs: macOS 확장 속성(com.apple.provenance)이 아카이브에 들어가면
+#   FreeBSD 쪽 추출이 "Cannot restore extended attributes"로 실패한다 (dry-run으로 확인).
+# --no-mac-metadata: --no-xattrs만 주면 bsdtar가 메타데이터를 AppleDouble(._*) 파일로
+#   바꿔 담아 이미지 오버레이에 ._* 쓰레기가 섞인다 (dry-run으로 확인). 둘 다 필요.
+tar --no-xattrs --no-mac-metadata -C nanobsd -cf - . | ssh "${SSH_OPTS[@]}" 'tar -xf - -C /zen'
 
 echo "== 2/5 패키지 프리플라이트 =="
 if ! ssh "${SSH_OPTS[@]}" "find /zen/packages -name '*.pkg' 2>/dev/null | grep -q ."; then
@@ -28,14 +32,14 @@ if ! ssh "${SSH_OPTS[@]}" "find /zen/packages -name '*.pkg' 2>/dev/null | grep -
 fi
 
 echo "== 3/5 SSH 공개키를 이미지 오버레이에 주입 =="
-PUB=$(cat ~/.ssh/id_ed25519.pub)
-# shellcheck disable=SC2029  # $PUB는 로컬(맥) 값을 원격 명령에 박아 넣으려는 의도된 클라이언트측 확장이다
-ssh "${SSH_OPTS[@]}" "mkdir -p /zen/overlay/root/.ssh \
-    && printf '%s\n' '$PUB' > /zen/overlay/root/.ssh/authorized_keys \
+# 키를 셸 문자열에 삽입하지 않고 stdin으로 전달 (주석 필드의 특수문자 안전)
+ssh "${SSH_OPTS[@]}" 'mkdir -p /zen/overlay/root/.ssh \
+    && cat > /zen/overlay/root/.ssh/authorized_keys \
     && chmod 700 /zen/overlay/root/.ssh \
-    && chmod 600 /zen/overlay/root/.ssh/authorized_keys"
+    && chmod 600 /zen/overlay/root/.ssh/authorized_keys' < ~/.ssh/id_ed25519.pub
 
 echo "== 4/5 NanoBSD 빌드 (로그: VM의 /usr/embedded/obj/_.bw 등) =="
+# 참고: 전달 인자는 공백 없는 단일 토큰 플래그만 지원 (-b 등)
 # shellcheck disable=SC2029  # $*는 -b 같은 옵션을 원격 셸로 전달하려는 의도된 클라이언트측 확장이다
 ssh "${SSH_OPTS[@]}" "cp /zen/zen.conf /usr/src/tools/tools/nanobsd/embedded/zen.conf \
     && cd /usr/src/tools/tools/nanobsd/embedded \

@@ -33,6 +33,7 @@ if [[ ! -f "$FW" ]]; then
 fi
 
 if [[ "$DAEMON" -eq 1 ]]; then
+    # pidfile 이 유실돼도 QEMU 자체의 디스크 이미지 잠금이 이중 기동을 막는 최후 방어선이다.
     if [[ -f "$PIDFILE" ]]; then
         OLD_PID="$(cat "$PIDFILE")"
         if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
@@ -46,24 +47,22 @@ fi
 
 # 쓰기 가능한 VARS pflash 는 의도적으로 붙이지 않는다: FreeBSD 는 ESP 폴백 경로
 # (\EFI\BOOT\bootaa64.efi)로 부팅하므로 UEFI 변수 영속화가 필요 없다.
+# shellcheck disable=SC2054  # qemu 옵션의 콤마는 의도된 문법
+QEMU_ARGS=(
+    -M virt -accel hvf -cpu host -smp "$CPUS" -m "$MEM"
+    -drive if=pflash,format=raw,file="$FW",readonly=on
+    -drive if=virtio,format=qcow2,file="$DISK"
+    -netdev user,id=n0,hostfwd=tcp:127.0.0.1:10022-:22
+    -device virtio-net-pci,netdev=n0
+)
+
 if [[ "$DAEMON" -eq 1 ]]; then
-    qemu-system-aarch64 \
-        -M virt -accel hvf -cpu host -smp "$CPUS" -m "$MEM" \
-        -drive if=pflash,format=raw,file="$FW",readonly=on \
-        -drive if=virtio,format=qcow2,file="$DISK" \
-        -netdev user,id=n0,hostfwd=tcp:127.0.0.1:10022-:22 \
-        -device virtio-net-pci,netdev=n0 \
+    qemu-system-aarch64 "${QEMU_ARGS[@]}" \
         -display none -serial "unix:$CONSOLE_SOCK,server=on,wait=off" \
         -daemonize -pidfile "$PIDFILE"
     echo "VM을 데몬 모드로 기동했습니다 (pid $(cat "$PIDFILE"))."
     echo "콘솔 접속: nc -U $CONSOLE_SOCK"
     echo "종료: ssh -p 10022 root@127.0.0.1 poweroff"
 else
-    exec qemu-system-aarch64 \
-        -M virt -accel hvf -cpu host -smp "$CPUS" -m "$MEM" \
-        -drive if=pflash,format=raw,file="$FW",readonly=on \
-        -drive if=virtio,format=qcow2,file="$DISK" \
-        -netdev user,id=n0,hostfwd=tcp:127.0.0.1:10022-:22 \
-        -device virtio-net-pci,netdev=n0 \
-        -nographic
+    exec qemu-system-aarch64 "${QEMU_ARGS[@]}" -nographic
 fi

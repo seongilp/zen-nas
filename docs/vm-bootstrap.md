@@ -38,3 +38,4 @@
 
 - 콘솔 로그인에 비밀번호는 필요 없다(공식 VM 이미지 기본). SSH는 키 인증만 허용된다.
 - VM 종료는 콘솔 또는 ssh에서 `poweroff`.
+- `scripts/vm-run.sh -d` 로 데몬 모드 기동도 가능하다. 이때 콘솔은 `nc -U vm/console.sock` 으로 접속한다.

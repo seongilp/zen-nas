@@ -45,6 +45,14 @@ ssh "${SSH_OPTS[@]}" "cp /zen/zen.conf /usr/src/tools/tools/nanobsd/embedded/zen
     && cd /usr/src/tools/tools/nanobsd/embedded \
     && sh ../nanobsd.sh -c zen.conf $*"
 
+echo "== 4.5/5 부팅 파티션 속성 설정 (gptboot가 cfg(p3) 대신 루트(p4)를 고르도록 bootme 지정) =="
+# embedded/common의 std-uefi-bios 레이아웃은 bootme 속성을 설정하지 않는 미완성(WIP) 상태 —
+# gptboot는 bootme가 없으면 첫 freebsd-ufs(p3=cfg)에서 /boot/loader를 찾다 실패한다
+# (부팅 테스트 2차에서 확인). gpart 실패 시에도 md 디바이스는 반드시 해제한다.
+ssh "${SSH_OPTS[@]}" 'md=$(mdconfig -a -t vnode -f /usr/embedded/images/_.disk.image.zen) \
+    && { gpart set -a bootme -i 4 "$md" || { mdconfig -d -u "$md"; exit 1; }; } \
+    && mdconfig -d -u "$md"'
+
 echo "== 5/5 이미지 회수 =="
 mkdir -p build
 scp -P 10022 "root@127.0.0.1:${IMG_REMOTE}" build/zen.img

@@ -2,6 +2,16 @@
 # zen 이미지를 USB에 굽는다. 외장·이동식 디스크만 허용한다.
 set -euo pipefail
 
+# 외장 디스크가 아니면 즉시 중단한다.
+assert_external_disk() {
+    local disk="$1" fail_msg="$2" internal
+    internal=$(diskutil info -plist "$disk" | plutil -extract Internal raw -)
+    if [[ "$internal" != "false" ]]; then
+        echo "오류: $fail_msg" >&2
+        exit 1
+    fi
+}
+
 IMG="${1:-build/zen.img}"
 if [[ ! -f "$IMG" ]]; then
     echo "오류: 이미지 파일이 없습니다: $IMG" >&2
@@ -20,11 +30,7 @@ if [[ ! "$DISK" =~ ^disk[0-9]+$ ]]; then
 fi
 
 # 안전장치 1: 내장 디스크 거부
-INTERNAL=$(diskutil info -plist "$DISK" | plutil -extract Internal raw -)
-if [[ "$INTERNAL" != "false" ]]; then
-    echo "오류: $DISK 는 내장 디스크입니다. 중단합니다." >&2
-    exit 1
-fi
+assert_external_disk "$DISK" "$DISK 는 내장 디스크입니다. 중단합니다."
 
 # 안전장치 2: 대상 정보를 보여주고 명시적 확인
 diskutil info "$DISK" | grep -E "Device Node|Media Name|Disk Size"
@@ -34,6 +40,9 @@ if [[ "$CONFIRM" != "ERASE" ]]; then
     echo "취소했습니다."
     exit 0
 fi
+
+# 안전장치 3: 확인 대기 중 디스크가 바뀌었을 수 있으므로 쓰기 직전 재검증
+assert_external_disk "$DISK" "확인 후 $DISK 상태가 바뀌었습니다. 중단합니다."
 
 diskutil unmountDisk "/dev/$DISK"
 echo "== 굽는 중: $IMG → /dev/r$DISK =="

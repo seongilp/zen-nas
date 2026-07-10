@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"zenfs/zfs"
@@ -38,5 +39,14 @@ func TestHuman(t *testing.T) {
 	// %.1f 반올림이 단위 경계(1024.0)를 넘는 경우 다음 단위로 승격
 	if human(1073741823) != "1.0G" || human(1048575) != "1.0M" {
 		t.Fatalf("human boundary: %s %s", human(1073741823), human(1048575))
+	}
+}
+
+func TestStatusbarShowsError(t *testing.T) {
+	a := NewApp(nil)
+	a.errText = "boom\nsecond line"
+	bar := renderStatusbar(a, 80)
+	if !strings.Contains(bar, "boom") || strings.Contains(bar, "second line") {
+		t.Fatalf("statusbar: %q", bar)
 	}
 }

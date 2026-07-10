@@ -2,8 +2,12 @@ package ui
 
 import (
 	"context"
+	"os"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"zenfs/zfs"
 )
 
@@ -31,7 +35,26 @@ type App struct {
 }
 
 func NewApp(r zfs.Runner) *App {
-	return &App{runner: r, collapsed: map[string]bool{}, statuses: map[string]zfs.PoolStatus{}}
+	a := &App{runner: r, collapsed: map[string]bool{}, statuses: map[string]zfs.PoolStatus{}}
+	if os.Geteuid() != 0 {
+		a.errText = "root가 아닙니다 — 변경 작업은 실패합니다"
+	}
+	return a
+}
+
+type scrubTickMsg struct{}
+
+func scrubTick() tea.Cmd {
+	return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return scrubTickMsg{} })
+}
+
+func (a *App) scrubbing() bool {
+	for _, st := range a.statuses {
+		if strings.Contains(st.Scan, "in progress") {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) Init() tea.Cmd { return a.refresh() }
@@ -72,6 +95,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.cursor >= len(a.nodes) {
 			a.cursor = max(0, len(a.nodes)-1)
 		}
+		if a.scrubbing() {
+			return a, scrubTick()
+		}
+	case scrubTickMsg:
+		return a, a.refresh()
 	case opDoneMsg:
 		a.modal = nil
 		if m.err != nil {
@@ -130,8 +158,13 @@ func (a *App) View() string {
 	return body
 }
 
-// renderLayout: Task 7에서 2패널로 확장. 지금은 트리만.
 func renderLayout(a *App) string {
+	treeW := a.width * 2 / 5
+	detailW := a.width - treeW - 1
 	h := a.height - 2
-	return renderTree(a.nodes, a.cursor, h)
+	tree := lipgloss.NewStyle().Width(treeW).Height(h).Render(renderTree(a.nodes, a.cursor, h))
+	detail := lipgloss.NewStyle().Width(detailW).Height(h).PaddingLeft(1).
+		BorderStyle(lipgloss.NormalBorder()).BorderLeft(true).Render(renderDetail(a, detailW))
+	main := lipgloss.JoinHorizontal(lipgloss.Top, tree, detail)
+	return main + "\n" + renderStatusbar(a, a.width)
 }

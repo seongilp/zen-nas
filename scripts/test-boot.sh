@@ -13,20 +13,25 @@ if [[ ! -f "$IMG" ]]; then
     exit 1
 fi
 
-EXTRA=()
+# 디스크는 QEMU 기본 인터페이스 사용 — 실기(USB/AHCI)에 가까운 경로를 검증하기 위해 virtio를 쓰지 않는다
+# shellcheck disable=SC2054  # qemu 옵션의 콤마는 의도된 문법
+QEMU_ARGS=(
+    -m 2048 -smp 2
+    -drive "file=$IMG,format=raw"
+    -netdev user,id=n0,hostfwd=tcp:127.0.0.1:10122-:22
+    -device virtio-net-pci,netdev=n0
+)
+
 if [[ "${1:-}" == "--uefi" ]]; then
     FW="$(brew --prefix)/share/qemu/edk2-x86_64-code.fd"
     if [[ ! -f "$FW" ]]; then
         echo "오류: UEFI 펌웨어를 찾을 수 없습니다: $FW" >&2
         exit 1
     fi
-    EXTRA=(-drive "if=pflash,format=raw,file=$FW,readonly=on")
+    QEMU_ARGS+=(-drive "if=pflash,format=raw,file=$FW,readonly=on")
+elif [[ -n "${1:-}" ]]; then
+    echo "오류: 알 수 없는 옵션: $1 (지원: --uefi)" >&2
+    exit 1
 fi
 
-exec qemu-system-x86_64 \
-    -m 2048 -smp 2 \
-    -drive "file=$IMG,format=raw" \
-    -netdev user,id=n0,hostfwd=tcp:127.0.0.1:10122-:22 \
-    -device virtio-net-pci,netdev=n0 \
-    ${EXTRA[@]+"${EXTRA[@]}"} \
-    -nographic
+exec qemu-system-x86_64 "${QEMU_ARGS[@]}" -nographic

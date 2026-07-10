@@ -2,6 +2,8 @@
 # 빌드 VM을 기동한다. 콘솔은 이 터미널에 붙는다 (종료: VM 안에서 poweroff).
 set -euo pipefail
 
+cd "$(dirname "$0")/.."
+
 DISK="vm/builder.qcow2"
 FW="$(brew --prefix)/share/qemu/edk2-aarch64-code.fd"
 CPUS="${ZEN_VM_CPUS:-8}"
@@ -16,6 +18,8 @@ if [[ ! -f "$FW" ]]; then
     exit 1
 fi
 
+# 쓰기 가능한 VARS pflash 는 의도적으로 붙이지 않는다: FreeBSD 는 ESP 폴백 경로
+# (\EFI\BOOT\bootaa64.efi)로 부팅하므로 UEFI 변수 영속화가 필요 없다.
 exec qemu-system-aarch64 \
     -M virt -accel hvf -cpu host -smp "$CPUS" -m "$MEM" \
     -drive if=pflash,format=raw,file="$FW",readonly=on \

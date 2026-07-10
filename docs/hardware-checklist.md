@@ -16,6 +16,8 @@
 - [ ] 디스크 확인: `camcontrol devlist` / `nvmecontrol devlist`
 - [ ] ZFS 풀 생성 (예: 미러):
       `zpool create tank mirror ada0 ada1`
+      풀 이름은 반드시 `tank` — 마운트포인트 /tank 가 읽기전용 이미지에 베이크되어 있다.
+      (다른 이름을 쓰려면 `zpool create -m /tank <이름> ...` 처럼 마운트포인트를 지정)
 - [ ] 데이터셋 생성:
       `zfs create tank/data && zfs create -p tank/backup/cfg`
 - [ ] 사용자 생성: `pw useradd zen -m -s /bin/sh && passwd zen && smbpasswd -a zen`

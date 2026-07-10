@@ -1,0 +1,7 @@
+# 빌드 산출물과 VM 디스크는 커밋하지 않는다
+build/
+vm/
+*.img
+*.qcow2
+*.qcow2.xz
+.DS_Store

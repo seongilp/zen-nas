@@ -1,0 +1,31 @@
+#!/bin/sh
+# PROVIDE: zenvar
+# REQUIRE: var
+# BEFORE: samba_server rsyncd lighttpd
+
+# shellcheck disable=SC1091  # rc.subr is a FreeBSD base file, not present on the dev host
+. /etc/rc.subr
+
+name="zenvar"
+# shellcheck disable=SC2034  # consumed by rc.subr's load_rc_config/run_rc_command, not directly referenced here
+desc="Create service dirs on memory-backed /var"
+# shellcheck disable=SC2034  # consumed by rc.subr's run_rc_command via indirect variable lookup
+start_cmd="zenvar_start"
+# shellcheck disable=SC2034  # consumed by rc.subr's run_rc_command via indirect variable lookup
+stop_cmd=":"
+
+zenvar_start()
+{
+	# samba423 pkg plist 기준 (root:wheel 0755)
+	install -d -o root -g wheel -m 0755 \
+		/var/db/samba4 /var/db/samba4/private \
+		/var/log/samba4 /var/run/samba4
+
+	# lighttpd pkg plist 기준 (www:www 0700)
+	install -d -o www -g www -m 0700 \
+		/var/cache/lighttpd /var/log/lighttpd \
+		/var/run/lighttpd /var/run/lighttpd/sockets
+}
+
+load_rc_config $name
+run_rc_command "$1"

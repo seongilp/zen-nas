@@ -23,7 +23,9 @@ ssh "${SSH_OPTS[@]}" 'rm -rf /zen/overlay /zen/zen.conf && mkdir -p /zen'
 #   FreeBSD 쪽 추출이 "Cannot restore extended attributes"로 실패한다 (dry-run으로 확인).
 # --no-mac-metadata: --no-xattrs만 주면 bsdtar가 메타데이터를 AppleDouble(._*) 파일로
 #   바꿔 담아 이미지 오버레이에 ._* 쓰레기가 섞인다 (dry-run으로 확인). 둘 다 필요.
-tar --no-xattrs --no-mac-metadata -C nanobsd -cf - . | ssh "${SSH_OPTS[@]}" 'tar -xf - -C /zen'
+# --uid 0 --gid 0: 맥 사용자 uid(501:staff)가 아카이브에 실려 이미지 파일 소유권을
+#   오염시키지 않도록 생성 시점에 root:wheel(0:0)로 정규화한다 (부팅 테스트에서 확인).
+tar --no-xattrs --no-mac-metadata --uid 0 --gid 0 -C nanobsd -cf - . | ssh "${SSH_OPTS[@]}" 'tar -xf - -C /zen'
 
 echo "== 2/5 패키지 프리플라이트 =="
 if ! ssh "${SSH_OPTS[@]}" "find /zen/packages -name '*.pkg' 2>/dev/null | grep -q ."; then

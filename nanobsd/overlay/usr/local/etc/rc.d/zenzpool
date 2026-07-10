@@ -2,6 +2,8 @@
 # 부팅 시 ZFS 풀 자동 import — zpool.cache가 tmpfs /etc에 있어 재부팅마다 사라지므로
 # 캐시에 의존하지 않고 연결된 디스크의 풀을 임포트한다 (NAS 어플라이언스 동작).
 # 마운트는 이후 rc.d/zfs(zfs_enable)가 zfs mount -a 로 수행한다.
+# hostid가 tmpfs /etc에서 매 부팅 재생성되어 풀이 항상 '다른 시스템' 소유로 보이므로 -f가 필요하다.
+# (/root/save_cfg로 hostid를 /cfg에 영속화해도 -f는 무해한 안전망으로 유지)
 
 # PROVIDE: zenzpool
 # REQUIRE: hostid disks mountcritlocal
@@ -25,7 +27,7 @@ zenzpool_start()
 	kldload zfs 2>/dev/null || true
 	# 이미 임포트된 풀이 없을 때만 전체 import (-N: 마운트는 rc.d/zfs 몫)
 	if ! zpool list -H 2>/dev/null | grep -q .; then
-		zpool import -a -N 2>/dev/null || true
+		zpool import -a -N -f 2>/dev/null || true
 	fi
 }
 

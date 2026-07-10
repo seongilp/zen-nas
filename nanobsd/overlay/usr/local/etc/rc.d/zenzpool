@@ -1,0 +1,33 @@
+#!/bin/sh
+# 부팅 시 ZFS 풀 자동 import — zpool.cache가 tmpfs /etc에 있어 재부팅마다 사라지므로
+# 캐시에 의존하지 않고 연결된 디스크의 풀을 임포트한다 (NAS 어플라이언스 동작).
+# 마운트는 이후 rc.d/zfs(zfs_enable)가 zfs mount -a 로 수행한다.
+
+# PROVIDE: zenzpool
+# REQUIRE: hostid disks mountcritlocal
+# BEFORE: zpool zfs
+
+# shellcheck disable=SC1091  # rc.subr is a FreeBSD base file, not present on the dev host
+. /etc/rc.subr
+
+name="zenzpool"
+# shellcheck disable=SC2034  # consumed by rc.subr's run_rc_command via indirect variable lookup
+desc="Import ZFS pools without relying on zpool.cache"
+# shellcheck disable=SC2034  # consumed by rc.subr's run_rc_command via indirect variable lookup
+rcvar="zfs_enable"
+# shellcheck disable=SC2034  # consumed by rc.subr's run_rc_command via indirect variable lookup
+start_cmd="zenzpool_start"
+# shellcheck disable=SC2034  # consumed by rc.subr's run_rc_command via indirect variable lookup
+stop_cmd=":"
+
+zenzpool_start()
+{
+	kldload zfs 2>/dev/null || true
+	# 이미 임포트된 풀이 없을 때만 전체 import (-N: 마운트는 rc.d/zfs 몫)
+	if ! zpool list -H 2>/dev/null | grep -q .; then
+		zpool import -a -N 2>/dev/null || true
+	fi
+}
+
+load_rc_config $name
+run_rc_command "$1"

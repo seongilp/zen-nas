@@ -20,6 +20,7 @@
       (다른 이름을 쓰려면 `zpool create -m /tank <이름> ...` 처럼 마운트포인트를 지정)
 - [ ] 데이터셋 생성:
       `zfs create tank/data && zfs create -p tank/backup/cfg`
+- [ ] 풀 생성 후 `/root/save_cfg` 실행 시 `zfs/zpool.cache` 추가 여부를 물으면 y (자동 import의 이중 안전망)
 - [ ] 사용자 생성: `pw useradd zen -m -s /bin/sh && passwd zen && smbpasswd -a zen`
 - [ ] `/root/save_cfg` 실행으로 /etc 변경 영속화 (passwd/smbpasswd 파일 포함 여부 확인)
 - [ ] `/usr/local/etc/smb4.conf` 공유 주석 해제 → `service samba_server restart` → `/root/save_cfg`

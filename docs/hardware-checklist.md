@@ -22,7 +22,9 @@
 - [ ] `save_cfg` 실행으로 /etc 변경 영속화 (passwd/smbpasswd 파일 포함 여부 확인)
 - [ ] `/usr/local/etc/smb4.conf` 공유 주석 해제 → `service samba_server restart` → `save_cfg`
 - [ ] 맥 Finder에서 `smb://zen.local` 접속 확인
-- [ ] WebDAV 사용 시: htpasswd 파일 생성 후 `service lighttpd restart`
+- [ ] WebDAV 사용 시: htpasswd에 사용자 추가 후 `service lighttpd restart`
+      `printf 'zen:%s\n' "$(openssl passwd -apr1)" >> /usr/local/etc/lighttpd/htpasswd`
+      (lighttpd mod_authn_file htpasswd 백엔드는 APR-MD5(`$apr1$`) 해시 지원; 이후 `save_cfg` 불필요 — /usr/local/etc는 이미지 영역이므로 업데이트 시 다시 추가)
 - [ ] iSCSI 사용 시: `/etc/ctl.conf.sample` 참고해 /etc/ctl.conf 작성, rc.conf.local에서 ctld_enable=YES → `save_cfg`
 - [ ] 재부팅 내구성 확인: `shutdown -r now` 후 풀 자동 import·서비스 자동 기동·설정 유지 확인
 

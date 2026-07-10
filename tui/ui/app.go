@@ -144,8 +144,59 @@ func (a *App) current() *treeNode {
 	return &a.nodes[a.cursor]
 }
 
-// contextKey: 선택 항목 종류별 액션 키. Task 8·9에서 구현.
-func (a *App) contextKey(k string) tea.Cmd { return nil }
+func (a *App) execCmd(c zfs.Cmd) func() tea.Msg {
+	r := a.runner
+	return func() tea.Msg {
+		return opDoneMsg{err: zfs.Execute(context.Background(), r, c)}
+	}
+}
+
+// contextKey: 선택 항목 종류별 액션 키.
+func (a *App) contextKey(k string) tea.Cmd {
+	n := a.current()
+	switch k {
+	case "b":
+		if n != nil && n.kind == nodePool {
+			return a.execCmd(zfs.CmdScrubStart(n.name)) // 비파괴 — 확인 없이 즉시
+		}
+	case "B":
+		if n != nil && n.kind == nodePool {
+			return a.execCmd(zfs.CmdScrubStop(n.name))
+		}
+	case "D":
+		if n == nil {
+			return nil
+		}
+		switch n.kind {
+		case nodePool:
+			c := zfs.CmdDestroyPool(n.name)
+			a.modal = newConfirm(c, n.name, "풀 파괴 — 모든 데이터가 사라집니다", a.execCmd(c))
+		case nodeDataset:
+			c := zfs.CmdDestroyDataset(n.name, a.hasChildren(n.name))
+			a.modal = newConfirm(c, n.name, "데이터셋 파괴", a.execCmd(c))
+		case nodeSnapshot:
+			c := zfs.CmdDestroySnapshot(n.name)
+			a.modal = newConfirm(c, n.name, "스냅샷 파괴", a.execCmd(c))
+		}
+	case "R":
+		if n != nil && n.kind == nodeSnapshot {
+			c := zfs.CmdRollback(n.name)
+			m := newConfirm(c, n.name, "스냅샷 롤백", a.execCmd(c))
+			m.warning = "경고: 이 스냅샷 이후에 생성된 스냅샷·데이터가 모두 삭제됩니다 (-r)."
+			a.modal = m
+		}
+	}
+	return nil
+}
+
+func (a *App) hasChildren(name string) bool {
+	for _, d := range a.datasets {
+		if d.Type != zfs.TypeSnapshot && strings.HasPrefix(d.Name, name+"/") {
+			return true
+		}
+	}
+	return false
+}
 
 func (a *App) View() string {
 	if a.width == 0 {

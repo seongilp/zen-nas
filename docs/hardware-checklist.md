@@ -36,6 +36,7 @@
 2. 슬라이스 이미지를 NAS로 전송 (경로·절차는 Task 11 검증 후 확정)
 3. NAS: `/root/updatep1` 또는 `/root/updatep2` (현재 부팅 중이 아닌 쪽) 실행
 4. 재부팅 → 문제 시 부트 메뉴에서 이전 슬라이스로 롤백
+5. UEFI 부팅 환경에서는 슬라이스 전환 시 ESP의 `/efi/freebsd/loader.env`(currdev=disk0p4:/p5:)도 함께 갱신해야 한다 (ESP를 마운트해 수정: `mount_msdosfs /dev/da0p1 /mnt`)
 
 ## 재해 복구
 - USB 사망 시: 새 USB에 `scripts/flash-usb.sh` → 부팅 → `zpool import -f tank`

@@ -42,6 +42,46 @@ func TestHuman(t *testing.T) {
 	}
 }
 
+func TestHasChildrenCountsSnapshots(t *testing.T) {
+	a := NewApp(nil)
+	a.datasets = []zfs.Dataset{
+		{Name: "tank", Type: zfs.TypeFilesystem},
+		{Name: "tank/data", Type: zfs.TypeFilesystem},
+		{Name: "tank/data@s1", Type: zfs.TypeSnapshot}, // 하위 데이터셋 없이 스냅샷만
+	}
+	if !a.hasChildren("tank/data") {
+		t.Fatal("스냅샷 보유 데이터셋인데 hasChildren=false — destroy에 -r 누락됨")
+	}
+	if !a.hasChildren("tank") {
+		t.Fatal("하위 데이터셋 보유인데 hasChildren=false")
+	}
+	// 접두사 오탐 방지: "tank/da"는 "tank/data"의 부모가 아니다
+	if a.hasChildren("tank/da") {
+		t.Fatal("접두사 오탐: tank/da는 자식이 없어야 함")
+	}
+}
+
+func TestDestroyDatasetRecursiveSetsWarning(t *testing.T) {
+	a := NewApp(nil)
+	a.datasets = []zfs.Dataset{
+		{Name: "tank/data", Type: zfs.TypeFilesystem},
+		{Name: "tank/data@s1", Type: zfs.TypeSnapshot},
+	}
+	a.nodes = []treeNode{{kind: nodeDataset, name: "tank/data"}}
+	a.cursor = 0
+	a.contextKey("D")
+	m, ok := a.modal.(*confirmModel)
+	if !ok {
+		t.Fatal("D 키인데 확인 모달이 안 열림")
+	}
+	if !strings.Contains(m.cmd.String(), "-r") {
+		t.Fatalf("recursive destroy인데 -r 누락: %s", m.cmd.String())
+	}
+	if m.warning == "" {
+		t.Fatal("recursive destroy인데 경고 문구 없음")
+	}
+}
+
 func TestStatusbarShowsError(t *testing.T) {
 	a := NewApp(nil)
 	a.errText = "boom\nsecond line"

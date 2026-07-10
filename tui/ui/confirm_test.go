@@ -42,6 +42,25 @@ func TestConfirmFiresOnExactName(t *testing.T) {
 	}
 }
 
+func TestConfirmDoesNotFireTwice(t *testing.T) {
+	count := 0
+	c := newConfirm(zfs.CmdDestroyPool("tank"), "tank", "풀 파괴", func() tea.Msg { count++; return nil })
+	m := typeString(tea.Model(c), "tank")
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("첫 Enter인데 tea.Cmd 미반환")
+	}
+	cmd()
+	// opDoneMsg 도착 전 두 번째 Enter — 재실행되면 안 된다
+	_, cmd2 := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd2 != nil {
+		cmd2()
+	}
+	if count != 1 {
+		t.Fatalf("액션이 %d회 실행됨 (1회여야 함)", count)
+	}
+}
+
 func TestConfirmEscCancels(t *testing.T) {
 	c := newConfirm(zfs.CmdDestroyPool("tank"), "tank", "풀 파괴", func() tea.Msg { return nil })
 	_, cmd := c.Update(tea.KeyMsg{Type: tea.KeyEsc})

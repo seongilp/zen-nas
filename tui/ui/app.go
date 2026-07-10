@@ -172,8 +172,13 @@ func (a *App) contextKey(k string) tea.Cmd {
 			c := zfs.CmdDestroyPool(n.name)
 			a.modal = newConfirm(c, n.name, "풀 파괴 — 모든 데이터가 사라집니다", a.execCmd(c))
 		case nodeDataset:
-			c := zfs.CmdDestroyDataset(n.name, a.hasChildren(n.name))
-			a.modal = newConfirm(c, n.name, "데이터셋 파괴", a.execCmd(c))
+			recursive := a.hasChildren(n.name)
+			c := zfs.CmdDestroyDataset(n.name, recursive)
+			m := newConfirm(c, n.name, "데이터셋 파괴", a.execCmd(c))
+			if recursive {
+				m.warning = "경고: 하위 데이터셋·스냅샷이 함께 삭제됩니다 (-r)."
+			}
+			a.modal = m
 		case nodeSnapshot:
 			c := zfs.CmdDestroySnapshot(n.name)
 			a.modal = newConfirm(c, n.name, "스냅샷 파괴", a.execCmd(c))
@@ -189,9 +194,10 @@ func (a *App) contextKey(k string) tea.Cmd {
 	return nil
 }
 
+// hasChildren: 하위 데이터셋 또는 스냅샷(자신·후손의 것 포함)이 있으면 destroy에 -r이 필요하다.
 func (a *App) hasChildren(name string) bool {
 	for _, d := range a.datasets {
-		if d.Type != zfs.TypeSnapshot && strings.HasPrefix(d.Name, name+"/") {
+		if strings.HasPrefix(d.Name, name+"/") || strings.HasPrefix(d.Name, name+"@") {
 			return true
 		}
 	}

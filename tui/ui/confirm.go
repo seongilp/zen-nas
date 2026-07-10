@@ -29,6 +29,9 @@ func newConfirm(cmd zfs.Cmd, target, title string, action func() tea.Msg) *confi
 func (c *confirmModel) Init() tea.Cmd { return nil }
 
 func (c *confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if c.done { // 액션 발사 후 opDoneMsg 도착 전 재입력 무시 — 이중 실행 방지
+		return c, nil
+	}
 	if k, ok := msg.(tea.KeyMsg); ok {
 		switch k.Type {
 		case tea.KeyEsc:

@@ -1,11 +1,26 @@
 #!/bin/sh
 # /cfg 내용을 데이터 풀(tank/backup/cfg)로 백업한다.
 # 대상 데이터셋이 없으면 조용히 종료 (풀 구성 전 상태).
+# sendmail이 없으므로 실패는 syslog(logger)로 남긴다.
 set -eu
 
 DEST="/tank/backup/cfg"
+
+fail() {
+    logger -t zen-cfg-backup "$1"
+    exit 1
+}
+
 zfs list tank/backup/cfg >/dev/null 2>&1 || exit 0
 
-mount /cfg
-trap 'umount /cfg' EXIT
-rsync -a --delete /cfg/ "$DEST/"
+# 데이터셋이 실제로 그 경로에 마운트되어 있는지 확인 (미마운트 시 엉뚱한 곳에 쓰는 사고 방지)
+[ "$(zfs get -H -o value mounted tank/backup/cfg)" = "yes" ] \
+    || fail "tank/backup/cfg 데이터셋이 마운트되어 있지 않음 — 백업 건너뜀"
+
+# 이전 실행이 죽어 /cfg가 이미 마운트된 채 남았으면 그대로 사용 (자가 회복)
+if ! mount | grep -q ' /cfg '; then
+    mount /cfg || fail "/cfg 마운트 실패"
+fi
+trap 'umount /cfg' 1 2 15 EXIT
+
+rsync -a --delete /cfg/ "$DEST/" || fail "rsync 실패"

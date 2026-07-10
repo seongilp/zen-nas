@@ -23,7 +23,7 @@ rsyncd_enable="YES"
 # WebDAV (lighttpd)
 lighttpd_enable="YES"
 
-# FTP (freebsd-ftpd 패키지 — base에는 더 이상 포함되지 않음; Task 6 fetch 목록에 추가 필요)
+# FTP — 빌드 패키지 목록에 freebsd-ftpd 필요 (15.x base에서 제거됨)
 ftpd_enable="YES"
 
 # iSCSI 타겟 — /etc/ctl.conf 작성 후 YES로 변경

@@ -75,7 +75,12 @@ func human(b uint64) string {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f%c", float64(b)/float64(div), "KMGTPE"[exp])
+	v := float64(b) / float64(div)
+	if v >= 1023.95 { // %.1f 반올림이 1024.0으로 표기되는 경계면 다음 단위로 승격
+		v /= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f%c", v, "KMGTPE"[exp])
 }
 
 var selStyle = lipgloss.NewStyle().Reverse(true)

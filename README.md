@@ -35,3 +35,11 @@ scripts/flash-usb.sh       # 7. USB 굽기
 | 서비스 | SMB(fruit)·NFS·rsyncd·WebDAV(lighttpd:8080)·FTP·iSCSI(기본 꺼짐) |
 | 관리 | SSH(root, 키 전용) + 설정파일 + /root/save_cfg |
 | 빌드 | 맥 → FreeBSD aarch64 VM(QEMU/HVF) → amd64 크로스 빌드 |
+
+## 검증 기록 (2026-07-11, QEMU x86-64)
+
+- BIOS(SeaBIOS)·UEFI(OVMF) 양쪽에서 로그인 프롬프트 도달 (`machdep.bootmethod` 로 확인)
+- 6개 서비스 전부 기동: sshd, samba_server(smbd×3), nfsd, rsyncd, lighttpd, ftpd
+- `pkg info` 89개 패키지 정상 등록
+- ZFS: 풀 생성 → 데이터 기록 → 재부팅 → 자동 import·마운트·데이터 보존 확인
+- `/root/save_cfg` 영속화, `zen-cfg-backup` 실행 확인

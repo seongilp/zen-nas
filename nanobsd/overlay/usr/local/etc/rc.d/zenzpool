@@ -1,13 +1,16 @@
 #!/bin/sh
-# 부팅 시 ZFS 풀 자동 import — zpool.cache가 tmpfs /etc에 있어 재부팅마다 사라지므로
-# 캐시에 의존하지 않고 연결된 디스크의 풀을 임포트한다 (NAS 어플라이언스 동작).
-# 마운트는 이후 rc.d/zfs(zfs_enable)가 zfs mount -a 로 수행한다.
+# 부팅 시 ZFS 풀 자동 import + mount — zpool.cache가 tmpfs /etc에 있어 재부팅마다
+# 사라지므로 캐시에 의존하지 않고 연결된 디스크의 풀을 임포트한다 (NAS 어플라이언스 동작).
+# /etc/rc는 부팅을 early/late 두 단계로 나누며(early_late_divider=FILESYSTEMS),
+# /usr/local/etc/rc.d 같은 local_startup 스크립트는 late 단계에서만 실행된다.
+# base rc.d/zfs(BEFORE: FILESYSTEMS)의 zfs mount -a 는 early 단계라 이 스크립트보다
+# 먼저 이미 지나갔다 — 그래서 import와 mount를 모두 이 스크립트가 수행한다.
+# (base zfs/zpool에 대한 BEFORE 지정은 단계가 달라 무의미하므로 두지 않는다)
 # hostid가 tmpfs /etc에서 매 부팅 재생성되어 풀이 항상 '다른 시스템' 소유로 보이므로 -f가 필요하다.
 # (/root/save_cfg로 hostid를 /cfg에 영속화해도 -f는 무해한 안전망으로 유지)
 
 # PROVIDE: zenzpool
 # REQUIRE: hostid disks mountcritlocal
-# BEFORE: zpool zfs
 
 # shellcheck disable=SC1091  # rc.subr is a FreeBSD base file, not present on the dev host
 . /etc/rc.subr
@@ -25,10 +28,14 @@ stop_cmd=":"
 zenzpool_start()
 {
 	kldload zfs 2>/dev/null || true
-	# 이미 임포트된 풀이 없을 때만 전체 import (-N: 마운트는 rc.d/zfs 몫)
+	# 이미 임포트된 풀이 없을 때만 전체 import
 	if ! zpool list -H 2>/dev/null | grep -q .; then
 		zpool import -a -N -f 2>/dev/null || true
 	fi
+	# base rc.d/zfs의 mount -a는 early 단계에서 이미 지나갔으므로 여기서 직접 마운트.
+	# 풀이 이미 임포트돼 있어도 미마운트 데이터셋이 있을 수 있어 가드 밖에서 무조건 실행
+	# (마운트할 것이 없으면 무해한 no-op).
+	zfs mount -a
 }
 
 load_rc_config $name

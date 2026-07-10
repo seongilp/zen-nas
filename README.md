@@ -43,3 +43,13 @@ scripts/flash-usb.sh       # 7. USB 굽기
 - `pkg info` 89개 패키지 정상 등록
 - ZFS: 풀 생성 → 데이터 기록 → 재부팅 → 자동 import·마운트·데이터 보존 확인
 - `/root/save_cfg` 영속화, `zen-cfg-backup` 실행 확인
+
+## 알려진 제약 (v1)
+
+- **A/B 무중단 업데이트 절차는 문서화만 되어 있고 실기 검증 전** — 첫 업데이트는 수동 확인 권장.
+- **UEFI 부팅은 슬라이스 A(p4)에 고정** (ESP의 `/efi/freebsd/loader.env`). UEFI에서 B로 전환하려면 이 파일 수정 필요; BIOS 경로는 gptboot bootme로 A/B 전환.
+- **WebDAV는 수동 셋업 필요**: `tank/webdav` 데이터셋 + htpasswd 사용자 추가 전까지 401 응답.
+- **iSCSI 기본 꺼짐**: ctl.conf 작성 + ctld_enable=YES 필요.
+- **패키지 ABI가 FreeBSD 15에 고정** (`zen.conf`) — 베이스 메이저 업그레이드 시 함께 수정.
+- **SSH는 키 전용, root 비밀번호 없음** — 키 분실 시 물리 콘솔로 복구.
+- **새 빌드 VM은 최초 1회 수동 SSH 개통 필요** (`docs/vm-bootstrap.md`).

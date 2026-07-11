@@ -37,13 +37,14 @@ type App struct {
 	width     int
 	height    int
 	modal     tea.Model // nil이면 모달 없음
-	errText   string
+	errText   string    // 마지막 작업/새로고침 오류 — 성공 새로고침 시 지워짐
+	warnText  string    // 상시 경고 (예: 비root) — 지워지지 않음
 }
 
 func NewApp(r zfs.Runner) *App {
 	a := &App{runner: r, collapsed: map[string]bool{}, statuses: map[string]zfs.PoolStatus{}}
 	if os.Geteuid() != 0 {
-		a.errText = "root가 아닙니다 — 변경 작업은 실패합니다"
+		a.warnText = "root가 아닙니다 — 변경 작업은 실패합니다"
 	}
 	return a
 }
@@ -102,6 +103,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.pools, a.datasets, a.statuses, a.disks = m.pools, m.datasets, m.statuses, m.disks
+		a.errText = "" // 성공 새로고침 — 스테일 오류 제거 (상시 경고는 warnText에 유지)
 		a.nodes = buildTree(a.pools, a.datasets, a.collapsed)
 		if a.cursor >= len(a.nodes) {
 			a.cursor = max(0, len(a.nodes)-1)
@@ -115,9 +117,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.modal = m.m
 		return a, nil
 	case opDoneMsg:
-		a.modal = nil
 		if m.err != nil {
+			// 실패: stderr 전문을 모달로 표시 (모달 자신의 Enter/Esc가 opDoneMsg{}를
+			// 다시 보내 성공 경로로 닫힌다 — 루프 없음).
 			a.errText = m.err.Error()
+			a.modal = &errModal{text: m.err.Error()}
+		} else {
+			a.modal = nil
 		}
 		return a, a.refresh()
 	case tea.KeyMsg:
@@ -233,7 +239,15 @@ func (a *App) contextKey(k string) tea.Cmd {
 						return zfs.Cmd{Name: "false"}
 					}
 					return zfs.CmdReplaceDisk(pool, tok[0], tok[1])
-				}, a.execCmd)
+				},
+				// 즉시 실행 대신 이름 타이핑 확인 게이트를 거친다 (파괴·롤백과 동일).
+				func(c zfs.Cmd) func() tea.Msg {
+					if c.Name == "false" { // 형식 오류는 그대로 표면화
+						return a.execCmd(c)
+					}
+					confirm := newConfirm(c, pool, "디스크 교체 — 리실버가 시작됩니다", a.execCmd(c))
+					return func() tea.Msg { return showModalMsg{m: confirm} }
+				})
 		}
 	}
 	return nil

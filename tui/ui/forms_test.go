@@ -1,12 +1,21 @@
 package ui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"zenfs/zfs"
 )
+
+// fakeRunner: 실행된 명령 전문을 기록하는 테스트용 Runner.
+type fakeRunner struct{ calls []string }
+
+func (f *fakeRunner) Run(_ context.Context, name string, args ...string) (string, string, error) {
+	f.calls = append(f.calls, name+" "+strings.Join(args, " "))
+	return "", "", nil
+}
 
 func TestTextFormRejectsEmptyAndFlagInput(t *testing.T) {
 	execCount := 0
@@ -78,5 +87,43 @@ func TestPoolWizardTransitionsToConfirmViaAppUpdate(t *testing.T) {
 	}
 	if !strings.Contains(cm.cmd.String(), "zpool create tank ada1") {
 		t.Fatalf("확인 모달 명령이 다름: %s", cm.cmd.String())
+	}
+}
+
+// 디스크 교체(x)도 파괴·롤백처럼 이름 타이핑 확인 게이트를 거쳐야 한다.
+func TestReplaceGoesThroughConfirm(t *testing.T) {
+	r := &fakeRunner{}
+	a := NewApp(r)
+	a.nodes = []treeNode{{kind: nodePool, name: "tank"}}
+	var m tea.Model = a
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if _, ok := a.modal.(*textForm); !ok {
+		t.Fatalf("x 키인데 입력 폼이 안 열림: %T", a.modal)
+	}
+	m = typeString(m, "ada1 ada3")
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("Enter인데 tea.Cmd 미반환")
+	}
+	m.Update(cmd())
+	cm, ok := a.modal.(*confirmModel)
+	if !ok {
+		t.Fatalf("확인 게이트 없이 진행됨: 모달이 %T (실행 기록: %v)", a.modal, r.calls)
+	}
+	if !strings.Contains(cm.cmd.String(), "zpool replace tank ada1 ada3") {
+		t.Fatalf("확인 모달 명령이 다름: %s", cm.cmd.String())
+	}
+	if len(r.calls) != 0 {
+		t.Fatalf("확인 전에 이미 실행됨: %v", r.calls)
+	}
+	// 풀 이름 타이핑 후 Enter → 그제서야 실행
+	m = typeString(m, "tank")
+	m, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("이름 일치인데 실행 cmd 미반환")
+	}
+	m.Update(cmd())
+	if len(r.calls) != 1 || !strings.Contains(r.calls[0], "zpool replace tank ada1 ada3") {
+		t.Fatalf("실행 기록이 다름: %v", r.calls)
 	}
 }

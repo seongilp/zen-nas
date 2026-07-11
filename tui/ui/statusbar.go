@@ -14,6 +14,9 @@ func renderStatusbar(a *App, width int) string {
 	if left == "" {
 		left = "풀 없음"
 	}
+	if a.warnText != "" {
+		left += "  ⚠ " + firstLine(a.warnText)
+	}
 	if a.errText != "" {
 		left += "  ⚠ " + firstLine(a.errText)
 	}

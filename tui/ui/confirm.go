@@ -51,6 +51,22 @@ func (c *confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 var modalStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).Padding(1, 2)
 
+// errModal: 작업 실패 시 stderr 전문을 표시하는 모달. Enter/Esc로 닫는다.
+type errModal struct{ text string }
+
+func (e *errModal) Init() tea.Cmd { return nil }
+
+func (e *errModal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if k, ok := msg.(tea.KeyMsg); ok && (k.Type == tea.KeyEsc || k.Type == tea.KeyEnter) {
+		return e, func() tea.Msg { return opDoneMsg{} }
+	}
+	return e, nil
+}
+
+func (e *errModal) View() string {
+	return modalStyle.Render("⚠ 작업 실패\n\n" + e.text + "\n\n(Enter/Esc 닫기)")
+}
+
 func (c *confirmModel) View() string {
 	s := fmt.Sprintf("⚠ %s\n\n실행될 명령:\n  %s\n", c.title, c.cmd.String())
 	if c.warning != "" {

@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"errors"
+	"os"
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"zenfs/zfs"
 )
 
@@ -88,5 +91,43 @@ func TestStatusbarShowsError(t *testing.T) {
 	bar := renderStatusbar(a, 80)
 	if !strings.Contains(bar, "boom") || strings.Contains(bar, "second line") {
 		t.Fatalf("statusbar: %q", bar)
+	}
+}
+
+// 작업 실패 시 stderr 전문(여러 줄)이 모달로 표시되고, Enter로 닫힌다.
+func TestOpErrorOpensErrModal(t *testing.T) {
+	a := NewApp(nil)
+	a.Update(opDoneMsg{err: errors.New("zpool destroy tank 실패\nstderr 전문 두 번째 줄")})
+	em, ok := a.modal.(*errModal)
+	if !ok {
+		t.Fatalf("실패인데 에러 모달이 안 열림: 모달이 %T", a.modal)
+	}
+	if !strings.Contains(em.View(), "stderr 전문 두 번째 줄") {
+		t.Fatalf("stderr 전문 누락: %q", em.View())
+	}
+	// Enter로 닫기
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("Enter인데 닫기 cmd 미반환")
+	}
+	a.Update(cmd())
+	if a.modal != nil {
+		t.Fatalf("닫은 뒤에도 모달이 남음: %T", a.modal)
+	}
+}
+
+// 성공 새로고침은 스테일 errText를 지우되, 상시 경고(warnText)는 유지한다.
+func TestRefreshSuccessClearsErrTextKeepsWarn(t *testing.T) {
+	a := NewApp(nil)
+	a.errText = "boom"
+	a.Update(refreshMsg{})
+	if a.errText != "" {
+		t.Fatalf("성공 새로고침 후에도 errText 잔존: %q", a.errText)
+	}
+	if os.Geteuid() != 0 && a.warnText == "" {
+		t.Fatal("비root 경고(warnText)가 없음")
+	}
+	if os.Geteuid() != 0 && !strings.Contains(renderStatusbar(a, 120), "root가 아닙니다") {
+		t.Fatal("상태바에 비root 경고 미표시")
 	}
 }

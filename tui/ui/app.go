@@ -21,6 +21,10 @@ type refreshMsg struct {
 
 type opDoneMsg struct{ err error }
 
+// showModalMsg: 모달 교체 요청. 모달 델리게이션(a.modal, cmd = a.modal.Update(m))이
+// 반환값으로 a.modal을 덮어쓰므로, 모달 안에서의 전환은 side effect 대신 메시지로 한다.
+type showModalMsg struct{ m tea.Model }
+
 type App struct {
 	runner    zfs.Runner
 	pools     []zfs.Pool
@@ -107,6 +111,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case scrubTickMsg:
 		return a, a.refresh()
+	case showModalMsg:
+		a.modal = m.m
+		return a, nil
 	case opDoneMsg:
 		a.modal = nil
 		if m.err != nil {
@@ -212,20 +219,20 @@ func (a *App) contextKey(k string) tea.Cmd {
 	case "P":
 		a.modal = newPoolForm(a.disks, func(name, vt string, disks []string) tea.Cmd {
 			c := zfs.CmdCreatePool(name, vt, disks)
-			a.modal = newConfirm(c, name, "풀 생성 — 선택 디스크의 기존 데이터가 사라집니다", a.execCmd(c))
-			return nil
+			confirm := newConfirm(c, name, "풀 생성 — 선택 디스크의 기존 데이터가 사라집니다", a.execCmd(c))
+			return func() tea.Msg { return showModalMsg{m: confirm} }
 		})
 	case "x":
 		if n != nil && n.kind == nodePool {
 			pool := n.name
 			a.modal = newTextForm("교체: <기존디스크> <새디스크> (공백 구분)", "",
 				func(v string) zfs.Cmd {
-					f := strings.Fields(v)
+					tok := strings.Fields(v)
 					// ★ 두 토큰 필수 + 플래그 주입 방지 (형식 오류는 false 실행으로 표면화)
-					if len(f) != 2 || strings.HasPrefix(f[0], "-") || strings.HasPrefix(f[1], "-") {
+					if len(tok) != 2 || strings.HasPrefix(tok[0], "-") || strings.HasPrefix(tok[1], "-") {
 						return zfs.Cmd{Name: "false"}
 					}
-					return zfs.CmdReplaceDisk(pool, f[0], f[1])
+					return zfs.CmdReplaceDisk(pool, tok[0], tok[1])
 				}, a.execCmd)
 		}
 	}

@@ -40,6 +40,18 @@ ssh "${SSH_OPTS[@]}" 'mkdir -p /zen/overlay/root/.ssh \
     && chmod 700 /zen/overlay/root/.ssh \
     && chmod 600 /zen/overlay/root/.ssh/authorized_keys' < ~/.ssh/id_ed25519.pub
 
+echo "== 3.5/5 zenfs TUI 컴파일·주입 =="
+if ! command -v go >/dev/null; then
+    echo "오류: go가 없습니다. brew install go 를 먼저 실행하세요." >&2
+    exit 1
+fi
+ZENFS_VER=$(git rev-parse --short HEAD)
+(cd tui && GOOS=freebsd GOARCH=amd64 CGO_ENABLED=0 \
+    go build -ldflags "-X main.version=${ZENFS_VER}" -o dist/zenfs .)
+ssh "${SSH_OPTS[@]}" 'mkdir -p /zen/overlay/usr/local/bin \
+    && cat > /zen/overlay/usr/local/bin/zenfs \
+    && chmod 755 /zen/overlay/usr/local/bin/zenfs' < tui/dist/zenfs
+
 echo "== 4/5 NanoBSD 빌드 (로그: VM의 /usr/embedded/obj/_.bw 등) =="
 # 참고: 전달 인자는 공백 없는 단일 토큰 플래그만 지원 (-b 등)
 # shellcheck disable=SC2029  # $*는 -b 같은 옵션을 원격 셸로 전달하려는 의도된 클라이언트측 확장이다

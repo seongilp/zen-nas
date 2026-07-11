@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"zenfs/smb"
 	"zenfs/zfs"
 )
 
@@ -16,6 +17,7 @@ type refreshMsg struct {
 	datasets []zfs.Dataset
 	statuses map[string]zfs.PoolStatus
 	disks    []zfs.Disk
+	shares   []smb.Share
 	err      error
 }
 
@@ -26,23 +28,26 @@ type opDoneMsg struct{ err error }
 type showModalMsg struct{ m tea.Model }
 
 type App struct {
-	runner    zfs.Runner
-	pools     []zfs.Pool
-	datasets  []zfs.Dataset
-	statuses  map[string]zfs.PoolStatus
-	disks     []zfs.Disk
-	nodes     []treeNode
-	cursor    int
-	collapsed map[string]bool
-	width     int
-	height    int
-	modal     tea.Model // nil이면 모달 없음
-	errText   string    // 마지막 작업/새로고침 오류 — 성공 새로고침 시 지워짐
-	warnText  string    // 상시 경고 (예: 비root) — 지워지지 않음
+	runner     zfs.Runner
+	pools      []zfs.Pool
+	datasets   []zfs.Dataset
+	statuses   map[string]zfs.PoolStatus
+	disks      []zfs.Disk
+	sharesPath string      // /etc/smb-shares.conf — zenfs가 소유하는 SMB 공유 정의 파일
+	shares     []smb.Share // refresh()마다 sharesPath에서 다시 로드되는 캐시
+	nodes      []treeNode
+	cursor     int
+	collapsed  map[string]bool
+	width      int
+	height     int
+	modal      tea.Model // nil이면 모달 없음
+	errText    string    // 마지막 작업/새로고침 오류 — 성공 새로고침 시 지워짐
+	warnText   string    // 상시 경고 (예: 비root) — 지워지지 않음
 }
 
 func NewApp(r zfs.Runner) *App {
-	a := &App{runner: r, collapsed: map[string]bool{}, statuses: map[string]zfs.PoolStatus{}}
+	a := &App{runner: r, collapsed: map[string]bool{}, statuses: map[string]zfs.PoolStatus{},
+		sharesPath: "/etc/smb-shares.conf"}
 	if os.Geteuid() != 0 {
 		a.warnText = "root가 아닙니다 — 변경 작업은 실패합니다"
 	}
@@ -68,6 +73,7 @@ func (a *App) Init() tea.Cmd { return a.refresh() }
 
 func (a *App) refresh() tea.Cmd {
 	r := a.runner
+	sharesPath := a.sharesPath
 	return func() tea.Msg {
 		ctx := context.Background()
 		pools, err := zfs.ListPools(ctx, r)
@@ -89,7 +95,8 @@ func (a *App) refresh() tea.Cmd {
 			stList = append(stList, st)
 		}
 		disks, _ := zfs.ListDisks(ctx, r, stList) // 실패해도 빈 목록으로 진행
-		return refreshMsg{pools: pools, datasets: datasets, statuses: statuses, disks: disks}
+		shares, _ := smb.List(sharesPath)         // 실패해도 빈 목록으로 진행 (파일 부재 등)
+		return refreshMsg{pools: pools, datasets: datasets, statuses: statuses, disks: disks, shares: shares}
 	}
 }
 
@@ -102,7 +109,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.errText = m.err.Error()
 			return a, nil
 		}
-		a.pools, a.datasets, a.statuses, a.disks = m.pools, m.datasets, m.statuses, m.disks
+		a.pools, a.datasets, a.statuses, a.disks, a.shares = m.pools, m.datasets, m.statuses, m.disks, m.shares
 		a.errText = "" // 성공 새로고침 — 스테일 오류 제거 (상시 경고는 warnText에 유지)
 		a.nodes = buildTree(a.pools, a.datasets, a.collapsed)
 		if a.cursor >= len(a.nodes) {
@@ -169,6 +176,17 @@ func (a *App) execCmd(c zfs.Cmd) func() tea.Msg {
 	return func() tea.Msg {
 		return opDoneMsg{err: zfs.Execute(context.Background(), r, c)}
 	}
+}
+
+// cmdSambaReload: SMB 공유 정의(smb-shares.conf) 변경분을 samba에 반영.
+func cmdSambaReload() zfs.Cmd {
+	return zfs.Cmd{Name: "service", Args: []string{"samba_server", "reload"}}
+}
+
+// cmdSaveCfg: NanoBSD /cfg 영속화. save_cfg가 대화형으로 묻는 확인 프롬프트를
+// "yes n"으로 자동 응답해 비대화식 실행이 가능하게 한다.
+func cmdSaveCfg() zfs.Cmd {
+	return zfs.Cmd{Name: "sh", Args: []string{"-c", "yes n | sh /root/save_cfg"}}
 }
 
 // contextKey: 선택 항목 종류별 액션 키.
@@ -249,6 +267,46 @@ func (a *App) contextKey(k string) tea.Cmd {
 					return func() tea.Msg { return showModalMsg{m: confirm} }
 				})
 		}
+	case "m":
+		if n == nil || n.kind != nodeDataset {
+			return nil
+		}
+		var d zfs.Dataset
+		found := false
+		for _, dd := range a.datasets {
+			if dd.Name == n.name {
+				d, found = dd, true
+				break
+			}
+		}
+		if !found || d.Mountpoint == "" {
+			return nil
+		}
+		mp := d.Mountpoint
+		if sh, ok := smb.FindByPath(a.shares, mp); ok {
+			// 이미 공유 중 — 동기적으로 파일에서 제거 후 reload만 execCmd로 실행.
+			if err := smb.Remove(a.sharesPath, sh.Name); err != nil {
+				return func() tea.Msg { return opDoneMsg{err: err} }
+			}
+			a.errText = "공유 해제됨 — [w]로 영속화"
+			return a.execCmd(cmdSambaReload())
+		}
+		// 미공유 — 이름 입력 폼. textForm은 build(v) zfs.Cmd 시그니처만 지원하고
+		// smb.Add는 파일 쓰기(부수효과)라 Cmd를 만들지 않으므로, build 클로저 안에서
+		// Add를 동기 실행하고 그 성패를 실행할 zfs.Cmd로 인코딩하는 어댑터로 쓴다:
+		// 성공 시 reload 명령을, 실패 시 반드시 실패하는 false를 반환해 exec(a.execCmd)의
+		// opDoneMsg{err} → errModal 경로로 실패가 표면화되게 한다 (원인은 errText에도 기록).
+		a.modal = newTextForm("SMB 공유 이름", shortName(n.name),
+			func(v string) zfs.Cmd {
+				if err := smb.Add(a.sharesPath, smb.Share{Name: v, Path: mp}); err != nil {
+					a.errText = err.Error()
+					return zfs.Cmd{Name: "false"}
+				}
+				a.errText = "공유 추가됨 — [w]로 영속화"
+				return cmdSambaReload()
+			}, a.execCmd)
+	case "w":
+		return a.execCmd(cmdSaveCfg())
 	}
 	return nil
 }

@@ -22,7 +22,7 @@ func renderStatusbar(a *App, width int) string {
 	if a.errText != "" {
 		left += "  ⚠ " + firstLine(a.errText)
 	}
-	right := dimStyle.Render("[r]새로고침 [q]종료")
+	right := dimStyle.Render("[r]새로고침 [w]저장 [q]종료")
 	// ANSI 색상 코드가 섞인 문자열은 rune 개수와 화면 폭이 다르므로 lipgloss.Width()로 계산한다.
 	pad := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if pad < 1 {

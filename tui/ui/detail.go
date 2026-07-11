@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"zenfs/smb"
 	"zenfs/zfs"
 )
 
@@ -47,7 +48,12 @@ func renderDetail(a *App, width int) string {
 		}
 		fmt.Fprintf(&b, "%s\n\nused        %s\navail       %s\nrefer       %s\n", d.Name, human(d.Used), human(d.Avail), human(d.Refer))
 		fmt.Fprintf(&b, "compress    %s\nmountpoint  %s\nsnapshots   %d\n", d.Compression, d.Mountpoint, snaps)
-		b.WriteString("\n" + dimStyle.Render("[s]스냅샷 [c]하위 생성 [D]파괴"))
+		shareName := "없음"
+		if sh, ok := smb.FindByPath(a.shares, d.Mountpoint); ok {
+			shareName = sh.Name
+		}
+		fmt.Fprintf(&b, "smb 공유    %s\n", shareName)
+		b.WriteString("\n" + dimStyle.Render("[s]스냅샷 [c]하위 생성 [D]파괴 [m]SMB"))
 	case nodeSnapshot:
 		fmt.Fprintf(&b, "%s\n", n.name)
 		b.WriteString("\n" + dimStyle.Render("[R]롤백 [D]파괴"))

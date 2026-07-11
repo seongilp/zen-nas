@@ -15,6 +15,7 @@ type refreshMsg struct {
 	pools    []zfs.Pool
 	datasets []zfs.Dataset
 	statuses map[string]zfs.PoolStatus
+	disks    []zfs.Disk
 	err      error
 }
 
@@ -25,6 +26,7 @@ type App struct {
 	pools     []zfs.Pool
 	datasets  []zfs.Dataset
 	statuses  map[string]zfs.PoolStatus
+	disks     []zfs.Disk
 	nodes     []treeNode
 	cursor    int
 	collapsed map[string]bool
@@ -77,7 +79,12 @@ func (a *App) refresh() tea.Cmd {
 				statuses[p.Name] = st
 			}
 		}
-		return refreshMsg{pools: pools, datasets: datasets, statuses: statuses}
+		var stList []zfs.PoolStatus
+		for _, st := range statuses {
+			stList = append(stList, st)
+		}
+		disks, _ := zfs.ListDisks(ctx, r, stList) // 실패해도 빈 목록으로 진행
+		return refreshMsg{pools: pools, datasets: datasets, statuses: statuses, disks: disks}
 	}
 }
 
@@ -90,7 +97,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.errText = m.err.Error()
 			return a, nil
 		}
-		a.pools, a.datasets, a.statuses = m.pools, m.datasets, m.statuses
+		a.pools, a.datasets, a.statuses, a.disks = m.pools, m.datasets, m.statuses, m.disks
 		a.nodes = buildTree(a.pools, a.datasets, a.collapsed)
 		if a.cursor >= len(a.nodes) {
 			a.cursor = max(0, len(a.nodes)-1)
@@ -189,6 +196,37 @@ func (a *App) contextKey(k string) tea.Cmd {
 			m := newConfirm(c, n.name, "스냅샷 롤백", a.execCmd(c))
 			m.warning = "경고: 이 스냅샷 이후에 생성된 스냅샷·데이터가 모두 삭제됩니다 (-r)."
 			a.modal = m
+		}
+	case "s":
+		if n != nil && n.kind == nodeDataset {
+			ds := n.name
+			a.modal = newTextForm("스냅샷 이름 — "+ds+"@", defaultSnapName(),
+				func(v string) zfs.Cmd { return zfs.CmdCreateSnapshot(ds, v) }, a.execCmd)
+		}
+	case "c":
+		if n != nil && n.kind != nodeSnapshot {
+			base := n.name
+			a.modal = newTextForm("새 데이터셋 — "+base+"/", "",
+				func(v string) zfs.Cmd { return zfs.CmdCreateDataset(base+"/"+v, "lz4") }, a.execCmd)
+		}
+	case "P":
+		a.modal = newPoolForm(a.disks, func(name, vt string, disks []string) tea.Cmd {
+			c := zfs.CmdCreatePool(name, vt, disks)
+			a.modal = newConfirm(c, name, "풀 생성 — 선택 디스크의 기존 데이터가 사라집니다", a.execCmd(c))
+			return nil
+		})
+	case "x":
+		if n != nil && n.kind == nodePool {
+			pool := n.name
+			a.modal = newTextForm("교체: <기존디스크> <새디스크> (공백 구분)", "",
+				func(v string) zfs.Cmd {
+					f := strings.Fields(v)
+					// ★ 두 토큰 필수 + 플래그 주입 방지 (형식 오류는 false 실행으로 표면화)
+					if len(f) != 2 || strings.HasPrefix(f[0], "-") || strings.HasPrefix(f[1], "-") {
+						return zfs.Cmd{Name: "false"}
+					}
+					return zfs.CmdReplaceDisk(pool, f[0], f[1])
+				}, a.execCmd)
 		}
 	}
 	return nil

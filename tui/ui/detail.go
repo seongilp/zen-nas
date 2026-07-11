@@ -22,7 +22,7 @@ func renderDetail(a *App, width int) string {
 				p = pp
 			}
 		}
-		fmt.Fprintf(&b, "풀 %s  [%s]\n\n", p.Name, p.Health)
+		fmt.Fprintf(&b, "풀 %s  [%s]\n\n", p.Name, healthStyle(p.Health).Render(p.Health))
 		fmt.Fprintf(&b, "크기   %s\n사용   %s\n여유   %s\n\n", human(p.Size), human(p.Alloc), human(p.Free))
 		if st.Scan != "" {
 			fmt.Fprintf(&b, "scan: %s\n", st.Scan)
@@ -31,7 +31,7 @@ func renderDetail(a *App, width int) string {
 		for _, v := range st.VDevs {
 			fmt.Fprintf(&b, "%s%s  %s\n", strings.Repeat("  ", v.Depth), v.Name, v.State)
 		}
-		b.WriteString("\n[c]데이터셋 생성 [b]scrub 시작 [B]scrub 중지\n[x]디스크 교체 [D]풀 파괴 [P]새 풀")
+		b.WriteString("\n" + dimStyle.Render("[c]데이터셋 생성 [b]scrub 시작 [B]scrub 중지\n[x]디스크 교체 [D]풀 파괴 [P]새 풀"))
 	case nodeDataset:
 		var d zfs.Dataset
 		for _, dd := range a.datasets {
@@ -47,10 +47,10 @@ func renderDetail(a *App, width int) string {
 		}
 		fmt.Fprintf(&b, "%s\n\nused        %s\navail       %s\nrefer       %s\n", d.Name, human(d.Used), human(d.Avail), human(d.Refer))
 		fmt.Fprintf(&b, "compress    %s\nmountpoint  %s\nsnapshots   %d\n", d.Compression, d.Mountpoint, snaps)
-		b.WriteString("\n[s]스냅샷 [c]하위 생성 [D]파괴")
+		b.WriteString("\n" + dimStyle.Render("[s]스냅샷 [c]하위 생성 [D]파괴"))
 	case nodeSnapshot:
 		fmt.Fprintf(&b, "%s\n", n.name)
-		b.WriteString("\n[R]롤백 [D]파괴")
+		b.WriteString("\n" + dimStyle.Render("[R]롤백 [D]파괴"))
 	}
 	return b.String()
 }

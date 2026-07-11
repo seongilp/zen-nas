@@ -263,24 +263,36 @@ func (a *App) hasChildren(name string) bool {
 	return false
 }
 
+// minContentWidth/minContentHeight: 극단적으로 작은 터미널(예: 20x10 미만)에서도
+// 트리/디테일 패널 폭·높이가 음수로 내려가 레이아웃이 무너지지 않도록 하는 하한선.
+const (
+	minContentWidth  = 10
+	minContentHeight = 4
+)
+
 func (a *App) View() string {
 	if a.width == 0 {
 		return "로딩 중..."
 	}
-	body := renderLayout(a)
 	if a.modal != nil {
-		return body + "\n" + a.modal.View()
+		return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, a.modal.View())
 	}
-	return body
+	cw := min(a.width-4, maxContentWidth)
+	ch := min(a.height-3, maxContentHeight)
+	cw = max(cw, minContentWidth)
+	ch = max(ch, minContentHeight)
+	content := renderLayout(a, cw, ch) // 내부 콘텐츠를 cw×ch로
+	box := appBorder.Render(titleStyle.Render(" zen zfs ") + "\n" + content)
+	return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, box)
 }
 
-func renderLayout(a *App) string {
-	treeW := a.width * 2 / 5
-	detailW := a.width - treeW - 1
-	h := a.height - 2
-	tree := lipgloss.NewStyle().Width(treeW).Height(h).Render(renderTree(a.nodes, a.cursor, h))
-	detail := lipgloss.NewStyle().Width(detailW).Height(h).PaddingLeft(1).
+func renderLayout(a *App, w, h int) string {
+	treeW := w * 2 / 5
+	detailW := w - treeW - 1
+	innerH := max(h-2, 1) // 타이틀·상태바를 제외한 트리/디테일 영역 높이
+	tree := lipgloss.NewStyle().Width(treeW).Height(innerH).Render(renderTree(a.nodes, a.cursor, innerH))
+	detail := lipgloss.NewStyle().Width(detailW).Height(innerH).PaddingLeft(1).
 		BorderStyle(lipgloss.NormalBorder()).BorderLeft(true).Render(renderDetail(a, detailW))
 	main := lipgloss.JoinHorizontal(lipgloss.Top, tree, detail)
-	return main + "\n" + renderStatusbar(a, a.width)
+	return main + "\n" + renderStatusbar(a, w)
 }

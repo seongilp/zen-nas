@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"zenfs/zfs"
 )
 
@@ -129,5 +130,45 @@ func TestRefreshSuccessClearsErrTextKeepsWarn(t *testing.T) {
 	}
 	if os.Geteuid() != 0 && !strings.Contains(renderStatusbar(a, 120), "root가 아닙니다") {
 		t.Fatal("상태바에 비root 경고 미표시")
+	}
+}
+
+// 큰 터미널에서 콘텐츠가 좌상단에 눌어붙지 않고 화면 중앙에 배치되는지 확인.
+func TestViewCentersContent(t *testing.T) {
+	a := NewApp(nil)
+	a.width, a.height = 200, 50
+	pools, datasets := fixtureData()
+	a.pools, a.datasets = pools, datasets
+	a.nodes = buildTree(pools, datasets, a.collapsed)
+	view := a.View()
+	if !strings.Contains(view, "zen zfs") {
+		t.Fatal("타이틀 'zen zfs'가 뷰에 없음")
+	}
+	if got := lipgloss.Height(view); got != a.height {
+		t.Fatalf("뷰 높이가 터미널 높이와 다름: got %d want %d", got, a.height)
+	}
+	lines := strings.Split(view, "\n")
+	if strings.TrimSpace(lines[0]) != "" {
+		t.Fatalf("콘텐츠가 중앙 배치되지 않음 — 첫 줄이 비어있지 않음: %q", lines[0])
+	}
+}
+
+// 아주 작은 터미널(20x10)에서도 패닉 없이 렌더링되고, 콘텐츠 폭이 화면 안에 들어와야 한다.
+func TestViewTinyTerminalNoPanic(t *testing.T) {
+	sizes := [][2]int{{20, 10}, {10, 5}, {1, 1}}
+	for _, sz := range sizes {
+		a := NewApp(nil)
+		a.width, a.height = sz[0], sz[1]
+		pools, datasets := fixtureData()
+		a.pools, a.datasets = pools, datasets
+		a.nodes = buildTree(pools, datasets, a.collapsed)
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("%dx%d에서 패닉: %v", sz[0], sz[1], r)
+				}
+			}()
+			_ = a.View()
+		}()
 	}
 }

@@ -49,7 +49,7 @@ func (c *confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return c, cmd
 }
 
-var modalStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).Padding(1, 2)
+var modalStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(accent).Padding(1, 2)
 
 // errModal: 작업 실패 시 stderr 전문을 표시하는 모달. Enter/Esc로 닫는다.
 type errModal struct{ text string }
